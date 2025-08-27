@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>MapTiler Switch Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.1.0/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@v10.1.0/dist/ol.js"></script>
+  <script src="https://unpkg.com/ol-mapbox-style@12.1.1/dist/olms.js"></script>
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+
+    /* Collapsible right panel */
+    #side-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 350px;
+      background: rgba(255, 255, 255, 0.95);
+      border-left: 1px solid #ccc;
+      box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+      transform: translateX(0);
+      transition: transform 0.3s ease;
+      z-index: 1001;
+      padding: 15px;
+      font-family: sans-serif;
+      overflow-y: auto;
+    }
+
+    #side-panel.collapsed {
+      transform: translateX(100%);
+    }
+
+    #toggle-panel {
+      position: absolute;
+      top: 450px;
+      right: 350px;
+      width: 30px;
+      height: 30px;
+      background: white;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      z-index: 1002;
+      text-align: center;
+      line-height: 30px;
+      font-weight: bold;
+      font-family: sans-serif;
+    }
+
+    #toggle-panel.collapsed {
+      right: 0;
+    }
+
+    #switch {
+      margin-top: 10px;
+      padding: 5px 10px;
+      background: #eee;
+      border: 1px solid #999;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* Panels for grouping controls */
+    .panel {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .panel h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 1.1em;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+
+    /* Control groups */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 10px;
+    }
+
+    .control-group label {
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+
+    .control-group select,
+    .control-group input[type="range"],
+    .control-group button {
+      padding: 5px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    /* Gamma slider container */
+    #gamma-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      /* space between elements */
+      margin-top: 20px;
+    }
+
+    /* Label stays fixed width */
+    #gamma-control label {
+      white-space: nowrap;
+      /* keep label on one line */
+      font-weight: bold;
+    }
+
+    /* Slider takes remaining space */
+    #gammaSlider {
+      flex: 1;
+      /* grow to fill available space */
+    }
+
+    /* Reset button stays at the end */
+    #resetGamma {
+      flex: 0;
+      /* do not grow */
+    }
+
+    /* Constrain the button group width */
+    .btn-group {
+      display: flex;
+      /* keep buttons in a row */
+      flex-wrap: wrap;
+      /* wrap buttons to next line if too wide */
+      gap: 5px;
+      /* optional spacing between buttons */
+      max-width: 100%;
+      /* don’t exceed container width */
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    /* Buttons inside the group */
+    .btn-group button {
+      flex: 1 1 auto;
+      /* allow buttons to shrink/grow evenly */
+      min-width: 80px;
+      /* optional: minimum width per button */
+    }
+
+    .btn-group button:not(:last-child) {
+      border-right: 1px solid #ccc;
+    }
+
+    .btn-group button.active {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-group button:hover {
+      background: #e6e6e6;
+    }
+
+    /* Legend */
+    .legend-container {
+      margin-top: 10px;
+    }
+
+    #legend-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85em;
+    }
+
+    /* Smaller descriptive text */
+    .smaller-text {
+      font-size: 0.85em;
+      color: #363636;
+      margin-top: 5px;
+    }
+
+    #granularity-toggle {
+      position: absolute;
+      bottom: 15px;
+      left: 15px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 1em;
+      /* larger text */
+      font-weight: 500;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      z-index: 1000;
+    }
+
+    #granularity-toggle input {
+      transform: scale(1.3);
+      /* bigger checkbox */
+      margin-right: 6px;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <!-- Granularity Toggle in bottom-left -->
+  <div id="granularity-toggle">
+    <label>
+      <input type="checkbox" id="zoomGranularity" checked>
+      Auto-update of heatmap resolution on zoom
+    </label>
+  </div>
+
+  <!-- Collapsible Panel -->
+  <div id="side-panel">
+
+    <h2>Matching Visualization Tool</h2>
+
+    <p>
+      This interactive map viewer allows you to visually explore different metrics for the comparison of two datasets of
+      land use polygons.
+      It helps you assess the spatial and semantic alignment of the data in a geographically contextualized manner.
+    </p>
+
+    <!-- 
+    <p>Using the interactive controls below, you can switch between:</p>
+    <ul>
+      <li>The datasets you want to compare</li>
+      <li>The source perspective from which you want to assess</li>
+      <li>Different comparison metrics</li>
+    </ul>
+
+    <p>To dynamically adapt the visualizations to your own assessment goals, you can further:</p>
+    <ul>
+      <li>Switch between different map backgrounds</li>
+      <li>Dynamically change the coloring sensitivity</li>
+    </ul> 
+    -->
+
+    <br>
+    <h4>Hover over the controls for more information.</h4>
+
+    <div class="panel">
+      <h3>Data Selection</h3>
+      <div class="control-group" title="Select the study area you want to assess.">
+        <label for="dataset-select">Study Area:</label>
+        <select id="dataset-select"></select>
+      </div>
+
+      <div class="control-group"
+        title="Select the data source from whose perspective the data comparison is to be evaluated.">
+        <label>Data Source/Perspective:</label>
+        <div class="btn-group" id="perspective-group"></div>
+      </div>
+
+      <div class="control-group" title="Select the metric you want to visualize.">
+        <label for="measure-select">Metric:</label>
+        <select id="measure-select"></select>
+        <div id="measure-text" class="smaller-text">Dummy Text</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Visualization Settings</h3>
+      <div class="control-group" title="Select a background map.">
+        <label for="basemap-select">Basemap:</label>
+        <select id="basemap-select">
+          <option value="osm">OpenStreetMap</option>
+          <option value="satellite">Satellite</option>
+          <option value="opentopo">OpenTopoMap</option>
+        </select>
+      </div>
+
+      <div class="control-group" id="gamma-control" title="Adjust the color sensitivity (1.0 = linear gradient).">
+        <label for="gammaSlider">Sensitivity: <span id="gamma-value">1.0</span></label>
+        <input type="range" id="gammaSlider" min="0.1" max="5" step="0.1" value="1"><button id="resetGamma"
+          type="button">Reset</button>
+      </div>
+
+      <div class="legend-container" title="Legend">
+        <canvas id="legend-canvas" height="20"></canvas>
+        <div id="legend-labels">
+          <span id="legend-low">Low</span>
+          <span id="legend-high">High</span>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+
+  <!-- Toggle Button -->
+  <div id="toggle-panel">&laquo;</div>
+
+  <script>
+
+    const legendTextMap = {
+      "multiplicity": { low: "High Multiplicity", high: "Low Multiplicity" },
+      "is-matched": { low: "Unmatched", high: "Matched" },
+      "quality-IoU": { low: "Low", high: "High" },
+      "quality-combined": { low: "Low", high: "High" },
+      // add more measures as needed
+    };
+
+    // Map of measure => text
+    const measureTextMap = {
+      "multiplicity": "Shows the distribution of match multiplicities. For each polygon in the selected data source, the number of polygons it is matched to in the other data source is counted. Low multiplicities (ideally 1:1) indicate a consistent granularity between the compared sources.",
+      "is-matched": "Shows the distribution of matched and unmatched polygons of the selected data source.",
+      "quality-IoU": "Shows the distribution of the IoU-based match quality for each polygon in the selected data source. Unmatched polygons are treated as matched with a quality of zero.",
+      "quality-combined": "Shows the combined match quality for each polygon in the selected data source. Unmatched polygons are treated as matched with a quality of zero."
+    };
+
+
+
+    /////////////////////////////////////////////////
+    // CREATE MAP
+    /////////////////////////////////////////////////
+
+    const key = 'HhvSiuKvTv0cgVVeeerp';
+    const vectorStyle = `https://api.maptiler.com/maps/basic-v2/style.json?key=${key}`;
+
+    const center = ol.proj.fromLonLat([6.36527, 50.67902]);
+    const zoom = 20;
+
+    const satelliteLayer = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${key}`,
+        maxZoom: 20,
+        tileSize: 512,
+        crossOrigin: 'anonymous',
+      }),
+    });
+
+    const osmLayer = new ol.layer.Tile({
+      source: new ol.source.OSM()
+    });
+
+    const openTopoLayer = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: 'https://{a-c}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        maxZoom: 17,
+        attributions: '© OpenTopoMap (CC-BY-SA)'
+      })
+    });
+
+    const layers = {
+      osm: osmLayer,
+      satellite: satelliteLayer,
+      opentopo: openTopoLayer
+    };
+
+
+    const map = new ol.Map({
+      target: 'map',
+      layers: [osmLayer],
+      view: new ol.View({
+        center: center,
+        zoom: zoom,
+      }),
+    });
+
+    /////////////////////////////////////////////////
+    // READ MATCHING RESULTS
+    /////////////////////////////////////////////////
+
+    // Global variables
+    let x_min, x_max, y_min, y_max, values, maxVal;
+    let imageLayer;
+    let currentGamma = 1.0;
+
+    function loadDataset(url, fitMap = true) {
+      fetch(url)
+        .then(response => response.text())
+        .then(text => {
+          const parsed = parseCSV(text);
+          x_min = parsed.x_min;
+          x_max = parsed.x_max;
+          y_min = parsed.y_min;
+          y_max = parsed.y_max;
+          values = parsed.values;
+
+          // Determine maxVal for legend scaling
+          maxVal = -Infinity;
+          values.forEach(row => row.forEach(v => {
+            if (v > maxVal) maxVal = v;
+          }));
+
+          // Draw with current gamma
+          drawRaster(currentGamma);
+          drawLegend(maxVal, currentGamma);
+
+          if (fitMap) {
+            // Only recenter if requested
+            const centerX = (x_min + x_max) / 2;
+            const centerY = (y_min + y_max) / 2;
+            map.getView().setCenter([centerX, centerY]);
+            const extent = [x_min, y_min, x_max, y_max];
+            map.getView().fit(extent, { size: map.getSize(), padding: [20, 20, 20, 20] });
+          }
+        });
+    }
+
+    /////////////////////////////////////////////////
+    // FUNCTIONS
+    /////////////////////////////////////////////////
+
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      const header = lines[0].split(',').map(v => v.trim());
+      const x_min = parseFloat(header[0]);
+      const x_max = parseFloat(header[1]);
+      const y_min = parseFloat(header[2]);
+      const y_max = parseFloat(header[3]);
+
+      const dataRows = lines.slice(1);
+      const values = dataRows.map(line => line.split(',').map(Number));
+
+      return { x_min, x_max, y_min, y_max, values };
+    }
+
+    function getColor(value, maxVal, gamma) {
+      if (value == null || isNaN(value)) return [0, 0, 0, 0];
+
+      const ratio = Math.pow(value / maxVal, gamma);
+
+      let r, g, b;
+      if (ratio <= 0.5) {
+        // Red to yellow
+        const t = ratio / 0.5;
+        r = 255;
+        g = Math.floor(200 * t); // less than full 255
+        b = 0;
+      } else {
+        // Yellow to green
+        const t = (ratio - 0.5) / 0.5;
+        r = Math.floor(255 - 200 * t); // reduce red range
+        g = 200 + Math.floor(55 * t);  // green still reaches full
+        b = 0;
+      }
+
+      // Reduce saturation by blending with a neutral gray
+      const gray = 100; // pick gray base
+      const blendFactor = 0.2; // 0 = pure color, 1 = pure gray
+      r = Math.floor(r * (1 - blendFactor) + gray * blendFactor);
+      g = Math.floor(g * (1 - blendFactor) + gray * blendFactor);
+      b = Math.floor(b * (1 - blendFactor) + gray * blendFactor);
+
+      return [r, g, b, 170];
+    }
+
+
+
+    function drawRaster(gamma) {
+      const nRows = values.length;
+      const nCols = values[0].length;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = nCols;
+      canvas.height = nRows;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(nCols, nRows);
+
+      for (let row = 0; row < nRows; row++) {
+        for (let col = 0; col < nCols; col++) {
+          const val = values[row][col];
+          const idx = ((nRows - row - 1) * nCols + col) * 4;
+          if (val == null || isNaN(val)) {
+            imageData.data[idx + 0] = 0;
+            imageData.data[idx + 1] = 0;
+            imageData.data[idx + 2] = 0;
+            imageData.data[idx + 3] = 0;
+          } else {
+            const [r, g, b, a] = getColor(val, maxVal, gamma);
+            imageData.data[idx + 0] = r;
+            imageData.data[idx + 1] = g;
+            imageData.data[idx + 2] = b;
+            imageData.data[idx + 3] = a;
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      const imgSrc = canvas.toDataURL();
+
+      const extent = [x_min, y_min, x_max, y_max];
+
+      if (!imageLayer) {
+        imageLayer = new ol.layer.Image({
+          source: new ol.source.ImageStatic({
+            url: imgSrc,
+            imageExtent: extent,
+            projection: 'EPSG:3857'
+          })
+        });
+        map.addLayer(imageLayer);
+      } else {
+        // Replace only the source, keep the layer
+        imageLayer.setSource(new ol.source.ImageStatic({
+          url: imgSrc,
+          imageExtent: extent,
+          projection: 'EPSG:3857'
+        }));
+      }
+
+    }
+
+
+    function drawLegend(maxVal, gamma) {
+      const canvas = document.getElementById('legend-canvas');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+
+      const imageData = ctx.createImageData(width, height);
+      const data = imageData.data;
+
+      for (let x = 0; x < width; x++) {
+        // Map pixel x to value between 0 and maxVal
+        const value = (x / (width - 1)) * maxVal;
+        const [r, g, b, a] = getColor(value, maxVal, gamma);
+
+        for (let y = 0; y < height; y++) {
+          const idx = (y * width + x) * 4;
+          data[idx] = r;
+          data[idx + 1] = g;
+          data[idx + 2] = b;
+          data[idx + 3] = a;  // alpha
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function updateLegendLabels() {
+      const measure = measureSelect.value;
+      const labels = legendTextMap[measure] || { low: "Low", high: "High" };
+      document.getElementById("legend-low").textContent = labels.low;
+      document.getElementById("legend-high").textContent = labels.high;
+    }
+
+    // Update function
+    function updateMeasureText() {
+      const measure = measureSelect.value;
+      const text = measureTextMap[measure] || "Default text";
+      document.getElementById("measure-text").textContent = text;
+    }
+    /////////////////////////////////////////////////
+    // EVENTS
+    /////////////////////////////////////////////////
+
+    let fileIndex = {};
+    let currentDataset = "";
+    let currentPerspective = "";
+    let currentMeasure = "";
+    const visType = "heatmap"; // still constant for now
+
+    const datasetSelect = document.getElementById("dataset-select");
+    const measureSelect = document.getElementById("measure-select");
+    const perspectiveGroup = document.getElementById("perspective-group");
+
+
+
+    fetch("data/index.json")
+      .then(res => res.json())
+      .then(indexData => {
+        fileIndex = indexData;
+        populateDatasets();
+        updateLegendLabels();
+        updateMeasureText();
+        updateFilePath(); // Load default visualization at start
+      });
+
+    function populateDatasets() {
+      let datasets = Object.keys(fileIndex);
+      datasets.sort(); // Alphabetical order
+      datasetSelect.innerHTML = datasets
+        .map(d => {
+          const display = d.charAt(0).toUpperCase() + d.slice(1);
+          return `<option value="${d}">${display}</option>`;
+        })
+        .join("");
+
+      datasetSelect.addEventListener("change", () => {
+        currentDataset = datasetSelect.value;
+
+        // Pass current perspective & measure to try to keep them if possible
+        populatePerspectives(currentPerspective, currentMeasure);
+
+        updateFilePath();
+      });
+
+
+      // Default: first dataset alphabetically
+      currentDataset = datasets[0];
+      datasetSelect.value = currentDataset;
+      populatePerspectives();
+    }
+
+    function populatePerspectives(previousPerspective = null, previousMeasure = null) {
+      const perspectives = Object.keys(fileIndex[currentDataset]);
+      perspectives.sort();
+
+
+      // Use previous perspective if it exists in the new dataset; otherwise pick the first one
+      if (previousPerspective && perspectives.includes(previousPerspective)) {
+        currentPerspective = previousPerspective;
+      } else {
+        currentPerspective = perspectives[0];
+      }
+
+      perspectiveGroup.innerHTML = perspectives
+        .map(p => `<button type="button" data-value="${p}" class="${p === currentPerspective ? "active" : ""}">${p.toUpperCase()}</button>`)
+        .join("");
+
+      perspectiveGroup.querySelectorAll("button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          perspectiveGroup.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          currentPerspective = btn.dataset.value;
+
+          // Try to keep current measure if it exists for this perspective
+          populateMeasures(currentMeasure);
+          updateFilePath(null, false);
+        });
+      });
+
+      // Populate measures for the selected perspective
+      populateMeasures(previousMeasure);
+    }
+
+    function populateMeasures(previousMeasure = null) {
+      const measures = fileIndex[currentDataset][currentPerspective].measures;
+      measures.sort();
+
+      if (previousMeasure && measures.includes(previousMeasure)) {
+        currentMeasure = previousMeasure;
+      } else {
+        currentMeasure = measures[0];
+      }
+
+      measureSelect.innerHTML = measures
+        .map(m => `<option value="${m}" ${m === currentMeasure ? "selected" : ""}>${m}</option>`)
+        .join("");
+
+      // Update event listener
+      measureSelect.removeEventListener("change", updateFilePath);
+      measureSelect.addEventListener("change", () => {
+        currentMeasure = measureSelect.value;
+        updateLegendLabels();
+        updateMeasureText();
+        updateFilePath(null, false);
+      });
+    }
+    let lastGranularity = null; // store the last used granularity
+
+    function getGranularityForZoom(zoom) {
+      //console.log(zoom)
+      if (zoom <= 10) return "coarse";
+      if (zoom <= 12) return "medium";
+      return "fine";
+    }
+
+    map.getView().on('change:resolution', () => {
+      if (!zoomGranularityEnabled.checked) return;  // Skip if toggle is off
+      const zoom = map.getView().getZoom();
+      const granularity = getGranularityForZoom(zoom);
+
+      if (granularity !== lastGranularity) {
+        lastGranularity = granularity;
+        updateFilePath(granularity, false); // pass false to NOT recenter
+      }
+    });
+
+
+    function updateFilePath(granularityOverride = null, fitMap = true) {
+      const granularity = granularityOverride || lastGranularity || "coarse";
+      const filePath = `data/${currentDataset}_${currentPerspective}_${visType}_${currentMeasure}_${granularity}.csv`;
+      console.log("Selected file:", filePath);
+      loadDataset(filePath, fitMap);
+    }
+
+    const zoomGranularityEnabled = document.getElementById("zoomGranularity");
+
+    zoomGranularityEnabled.addEventListener("change", () => {
+      if (zoomGranularityEnabled.checked) {
+        console.log("Zoom-based granularity: ON");
+        // Pick granularity based on current zoom
+        const newGranularity = getGranularityForZoom(map.getView().getZoom());
+        updateFilePath(newGranularity, false);
+      } else {
+        console.log("Zoom-based granularity: OFF");
+        // Force coarse granularity
+        updateFilePath("coarse", false);
+      }
+    });
+
+
+    const gammaSlider = document.getElementById("gammaSlider");
+    const gammaValue = document.getElementById("gamma-value");
+    const resetGamma = document.getElementById("resetGamma");
+
+    gammaSlider.addEventListener("input", () => {
+      gammaValue.textContent = parseFloat(gammaSlider.value).toFixed(1);
+      currentGamma = parseFloat(gammaSlider.value);
+      drawRaster(currentGamma);
+      drawLegend(maxVal, currentGamma);
+    });
+
+    resetGamma.addEventListener("click", () => {
+      gammaSlider.value = 1;
+      gammaValue.textContent = (1).toFixed(1);
+      currentGamma = 1;
+      drawRaster(currentGamma);
+      drawLegend(maxVal, currentGamma);
+    });
+
+
+
+
+
+
+
+
+    document.getElementById('basemap-select').addEventListener('change', function () {
+      const selected = this.value;
+      const currentLayers = map.getLayers();
+
+      // Remove existing base layer (assuming it's always the first)
+      if (currentLayers.getLength() > 0) {
+        currentLayers.removeAt(0);
+      }
+
+      // Add new selected layer
+      map.getLayers().insertAt(0, layers[selected]);
+    });
+
+
+    // Toggle panel open/close
+    const panel = document.getElementById('side-panel');
+    const toggle = document.getElementById('toggle-panel');
+    toggle.addEventListener('click', () => {
+      panel.classList.toggle('collapsed');
+      toggle.classList.toggle('collapsed');
+      toggle.innerHTML = panel.classList.contains('collapsed') ? '&raquo;' : '&laquo;';
+    });
+  </script>
+</body>
+
+</html>

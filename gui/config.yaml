@@ -1,0 +1,31 @@
+nrw_landuse_2025:
+  categories:
+    - arable_land
+    - grassland
+    - perm_crops
+
+  gdf1:
+    category_column: "NUTZ_TXT"
+    mapping:
+      "Ackerland": arable_land
+      "Dauerkultur": perm_crops
+      "Dauergrünland": grassland
+
+  gdf2:
+    category_column: "VEG"
+    mapping:
+      "1010": arable_land
+      "1011": perm_crops
+      "1012": perm_crops
+      "1013": arable_land
+      "1014": arable_land
+      "1020": grassland
+      "1021": perm_crops
+      "1022": grassland
+      "1023": grassland
+      "1031": perm_crops
+      "1040": perm_crops
+      "1050": perm_crops
+      "1052": perm_crops
+      "1060": perm_crops
+      "1100": perm_crops
