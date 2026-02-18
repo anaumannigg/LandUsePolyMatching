@@ -1,4 +1,5 @@
-# Land-Use Polygon Matching
+# AgriMatch  
+### `Land-Use Polygon Matching`
 This repository provides a Python and C++ pipeline for matching and visualizing large-scale (land-use) polygon datasets.
 
 The workflow is designed to enable comprehensive comparisons of agricultural field polygons across datasets that differ in granularity, quality, and temporal reference. By establishing spatial correspondences between datasets, the pipeline supports:
