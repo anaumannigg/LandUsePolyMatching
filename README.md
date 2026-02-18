@@ -1,5 +1,14 @@
 # Land-Use Polygon Matching
-A Python and C++ Pipeline to match and visualize large-scale (land-use) polygon datasets.
+This repository provides a Python and C++ pipeline for matching and visualizing large-scale (land-use) polygon datasets.
+
+The workflow is designed to enable comprehensive comparisons of agricultural field polygons across datasets that differ in granularity, quality, and temporal reference. By establishing spatial correspondences between datasets, the pipeline supports:
+
+- Spatial and semantic quality validation
+- Consistency analysis
+- Data fusion and enrichment
+- Detection and analysis of temporal changes
+
+In addition, the repository includes a web-based visualization tool for interactive exploration of comparison results. Implemented as an intuitive map viewer, it allows users to examine multiple comparison metrics directly within their geographic context. The visualizations are specifically designed to clearly communicate both spatial and semantic alignment between datasets, making large-scale differences and agreements immediately interpretable.
 
 ## Data Preparation
 Your input data should be placed into `input/dataset_name`. It must be in the `.gpkg`file format. The files should be named in the form `dataset_name_descriptor1.gpkg` and `dataset_name_descriptor2.gpkg`. The descriptors should be short markers specifying the different dataset sources, e.g., `iacs` and `sat`.
