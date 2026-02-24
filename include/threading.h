@@ -16,6 +16,12 @@
 
 //define a struct for a decomposition task
 struct DecompositionTask {
+    //define min and max index of polys in set polys1 that should be queried for finding the intersected polys in polys2
+    int min_idx,max_idx;
+};
+
+//define a struct for a decomposition from txt task
+struct DecompositionFromTXTTask {
     std::pair<int, int> interval;
     int batch_size;
     std::string data_name;
@@ -36,34 +42,36 @@ public:
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
-                  GRBEnv& env,
                   std::atomic<int>& processed_counter);
 
     static void decompositionWorkerTHREAD(std::queue<DecompositionTask>& tasks,
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
-                  const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
-                  const Localization& rtree1, const Localization& rtree2, std::atomic<int>& processed_counter);
+                  const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2,
+                  const Localization& rtree2, std::vector<Edge>& thread_computed_edges, std::atomic<int>& processed_counter);
 
-    static void decompositionFromTXTWorkerTHREAD(std::queue<DecompositionTask>& tasks,
+    static void decompositionFromTXTWorkerTHREAD(std::queue<DecompositionFromTXTTask>& tasks,
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
                   const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2,
-                  std::atomic<int>& processed_counter);
+                  const std::string& filename, std::atomic<int>& processed_counter);
 
     static void statusTHREAD(std::atomic<int>& processed_counter, int num_sets);
 
-    static void solveConnectedSet(ConnectedSetTask task, GRBEnv& env,std::atomic<int>& processed_counter);
+    static void solveConnectedSet(ConnectedSetTask task, std::atomic<int>& processed_counter);
 
-    static void decomposeIntoConnectedComponents(DecompositionTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
+    static void decomposeIntoConnectedComponents(DecompositionFromTXTTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
                             const Localization& rtree1, const Localization& rtree2,
                             std::atomic<int>& processed_counter);
 
-    static void decomposeIntoConnectedComponentsUsingTXT(DecompositionTask task,
+    static std::vector<Edge> computeIntersectionsAsEdges(DecompositionTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const Localization& rtree2, std::atomic<int>& processed_counter);
+
+    static void decomposeIntoConnectedComponentsUsingTXT(DecompositionFromTXTTask task,
                                                  const std::vector<Polygon_wh>& polys1,
                                                  const std::vector<Polygon_wh>& polys2,
+                                                 const std::string& filename,
                                                  std::atomic<int>& processed_counter);
 
     static Solution combineThreadSolutions(const std::string& data_name, int num_batches, int num_polys1, int num_polys2, std::vector<int>& set_ids,

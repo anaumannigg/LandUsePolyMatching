@@ -26,10 +26,10 @@ class Localization {
 	//r tree for fast collection of polygons to check
 	bgi::rtree<Value_rtree, bgi::quadratic<16>> rtree;
 	//polys
-	std::vector<Polygon_wh>& polys;
+	const std::vector<Polygon_wh>& polys;
 
 public:
-	Localization(std::vector<Polygon_wh>& polys);
+	Localization(const std::vector<Polygon_wh>& polys);
 	bool get_neighbors(const Polygon_wh& p, std::vector<Polygon_wh>* neighbors) const;
     bool get_neighbors(const Polygon_wh& p, std::vector<int>* neighbors) const;
     bool get_neighbors(const Polygon& p, std::vector<int>* neighbors) const;

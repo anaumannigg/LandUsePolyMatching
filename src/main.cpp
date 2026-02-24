@@ -1,4 +1,5 @@
 #include "../include/threading.h"
+#include "../include/cc_decomposition.h"
 
 #include <exception>
 #include <filesystem>
@@ -57,7 +58,7 @@ void run_NtoM_with_PreDecomposition(const CommandLineOptions& options) {
 
 
     //if a file with the decomposition is already provided, this is the simplest way of getting the decomposition, prefer it
-    std::string fileDECOMPOSITION = "../input/" + data_name + "/connected_components.txt";
+    std::string fileDECOMPOSITION = "../input/" + data_name + "/connected_components_" + data_descr1 + "_" + data_descr2 +  ".txt";
     //if a file with the merged information is already provided, load it, else compute the union and save it for
     //later use
     std::string fileMERGED = "../input/" + data_name + "/" + data_name + "_merged";
@@ -66,91 +67,90 @@ void run_NtoM_with_PreDecomposition(const CommandLineOptions& options) {
     double timing_decomp = 0.0;
     int num_batches = 0;
     int num_components = 0;
-    if (fs::exists(fileDECOMPOSITION)) {
-        std::chrono::steady_clock::time_point decomp_begin = std::chrono::steady_clock::now();
 
-        //first count the lines (being the components)
-        std::string unused;
-        std::ifstream input_file(fileDECOMPOSITION);
-        while (std::getline(input_file,unused)) ++num_components;
-
-        //set sets per task
-        int sets_per_task = options.batch_size;
-        num_batches = num_components / sets_per_task;
-        //there might be an additional smaller batch to consider all polygons
-        bool last_batch_is_smaller = false;
-        if (num_components % sets_per_task != 0) {
-            num_batches++;
-            last_batch_is_smaller = true;
-        }
-
-        std::vector<std::pair<int,int>> task_set_intervals;
-        for(int t=0; t < num_batches;t++) {
-            if (last_batch_is_smaller && t == num_batches - 1) {
-                task_set_intervals.emplace_back((num_batches-1) * sets_per_task, num_components - 1);
-                break;
-            }
-            task_set_intervals.emplace_back(t * sets_per_task, (t + 1) * sets_per_task - 1);
-        }
-
-
-        //create tasks to be handled by threads
-        std::queue<DecompositionTask> decomp_tasks;
-        for (const auto& t : task_set_intervals) {
-            decomp_tasks.push((DecompositionTask){t, options.batch_size,data_name});
-        }
-
-        cout << "Starting Decomposition into connected sets using txt.\n\n";
-
-        //start status thread
-        std::atomic<int> processed_counter(0);
-        std::thread status_thread(Threading::statusTHREAD, std::ref(processed_counter),num_components);
-
-        //init mutexes
-        std::mutex queue_mutex;
-        std::condition_variable cv;
-        std::atomic<bool> done_flag(false);
-
-        //start worker threads
-        std::vector<std::thread> decomp_threads;
-        for(int t=0; t < num_threads; t++) {
-            decomp_threads.emplace_back(Threading::decompositionFromTXTWorkerTHREAD,
-                                        std::ref(decomp_tasks),std::ref(queue_mutex),std::ref(cv), std::ref(done_flag),
-                                         std::ref(polys1), std::ref(polys2),std::ref(processed_counter));
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex);
-            done_flag = true;
-        }
-        cv.notify_all();
-
-        //join threads
-        for(int t=0; t < num_threads; t++) {
-            decomp_threads[t].join();
-        }
-
-
-        //ensure the status thread finished
-        processed_counter = num_components;
-        status_thread.join();
-
-        cout << "Completed inital decomposition into connected subsets." << endl;
-        std::chrono::steady_clock::time_point decomp_end = std::chrono::steady_clock::now();
-        timing_decomp = std::chrono::duration_cast<std::chrono::nanoseconds>(decomp_end - decomp_begin).count() / 1e9;
-
-
-    }
-    else {
-        throw std::runtime_error("No decomposition file found. Please provide a file with the decomposition of the input data as txt using 'matching_predecomposer.py'.");
+    //check if the decomposition file exists already, if not create it (this only needs to be done once per dataset, future
+    //runs will be faster)
+    if (!fs::exists(fileDECOMPOSITION)) {
+        //decomposition file does not exist yet, create it
+        cout << "No decomposition file found. Creating one now..." << endl;
+        CCDecomposition::decomposeAndWriteToTXT(polys1,polys2,fileDECOMPOSITION,num_threads);
+        cout << "Completed initial decomposition into connected subsets and wrote " << fileDECOMPOSITION << endl;
     }
 
-    //initialize one global Gurobi Environment to avoid collisions on license check in multiple threads
-    GRBEnv env = GRBEnv(true);
-    //deactivate console logging
-    env.set("LogToConsole", "0");
-    //start environment
-    env.start();
+
+    std::chrono::steady_clock::time_point decomp_begin = std::chrono::steady_clock::now();
+
+    //first count the lines (being the components)
+    std::string unused;
+    std::ifstream input_file(fileDECOMPOSITION);
+    while (std::getline(input_file,unused)) ++num_components;
+
+    //set sets per task
+    int sets_per_task = options.batch_size;
+    num_batches = num_components / sets_per_task;
+    //there might be an additional smaller batch to consider all polygons
+    bool last_batch_is_smaller = false;
+    if (num_components % sets_per_task != 0) {
+        num_batches++;
+        last_batch_is_smaller = true;
+    }
+
+    std::vector<std::pair<int,int>> task_set_intervals;
+    for(int t=0; t < num_batches;t++) {
+        if (last_batch_is_smaller && t == num_batches - 1) {
+            task_set_intervals.emplace_back((num_batches-1) * sets_per_task, num_components - 1);
+            break;
+        }
+        task_set_intervals.emplace_back(t * sets_per_task, (t + 1) * sets_per_task - 1);
+    }
+
+
+    //create tasks to be handled by threads
+    std::queue<DecompositionFromTXTTask> decomp_tasks;
+    for (const auto& t : task_set_intervals) {
+        decomp_tasks.push((DecompositionFromTXTTask){t, options.batch_size,data_name});
+    }
+
+    cout << "Starting Decomposition into connected sets using txt.\n\n";
+
+    //start status thread
+    std::atomic<int> processed_counter(0);
+    std::thread status_thread(Threading::statusTHREAD, std::ref(processed_counter),num_components);
+
+    //init mutexes
+    std::mutex queue_mutex;
+    std::condition_variable cv;
+    std::atomic<bool> done_flag(false);
+
+    //start worker threads
+    std::vector<std::thread> decomp_threads;
+    for(int t=0; t < num_threads; t++) {
+        decomp_threads.emplace_back(Threading::decompositionFromTXTWorkerTHREAD,
+                                    std::ref(decomp_tasks),std::ref(queue_mutex),std::ref(cv), std::ref(done_flag),
+                                     std::ref(polys1), std::ref(polys2), std::ref(fileDECOMPOSITION), std::ref(processed_counter));
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        done_flag = true;
+    }
+    cv.notify_all();
+
+    //join threads
+    for(int t=0; t < num_threads; t++) {
+        decomp_threads[t].join();
+    }
+
+
+    //ensure the status thread finished
+    processed_counter = num_components;
+    status_thread.join();
+
+    cout << "Completed inital decomposition into connected subsets." << endl;
+    std::chrono::steady_clock::time_point decomp_end = std::chrono::steady_clock::now();
+    timing_decomp = std::chrono::duration_cast<std::chrono::nanoseconds>(decomp_end - decomp_begin).count() / 1e9;
+
+
 
 
     //execute for all lambdas
@@ -214,7 +214,7 @@ void run_NtoM_with_PreDecomposition(const CommandLineOptions& options) {
         for(int t=0; t < num_threads; t++) {
             set_threads[t] = std::thread(Threading::solvingWorkerTHREAD,
                                          std::ref(solving_tasks),std::ref(queue_mutex),std::ref(cv),std::ref(done_flag),
-                                         std::ref(env), std::ref(processed_counter));
+                                         std::ref(processed_counter));
         }
 
         {
@@ -273,6 +273,7 @@ void run_NtoM_with_PreDecomposition(const CommandLineOptions& options) {
         std::string csv_output_path = "../export/" + data_name + "/" + target_subfolder_obj + "/" + data_name + "_data";
         std::string analysis_output_path = "../export/" + data_name + "/" + target_subfolder_obj + "/" + data_name + "_analysis";
 
+        cout << "Now writing to output files, depending on the file size, this may take some time..." << endl;
         //if geopackage input, copy input files and extend attributes, else write shapefiles
         for (int i=0; i<2; i++) {
             std::string output_path = i==0? output_path1 + ".gpkg" : output_path2 + ".gpkg";

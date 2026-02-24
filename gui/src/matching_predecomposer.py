@@ -86,7 +86,7 @@ def write_components_txt(G, output_path):
             line = ",".join(a_ids) + " " + ",".join(b_ids)
             f.write(line + "\n")
 
-def compute_connected_components(fileA,fileB):
+def compute_connected_components(fileA,fileB,output_filename):
     #shapefiles = select_vector_files()
     #if len(shapefiles) != 2:
     #    print("Please select exactly two shapefiles.")
@@ -104,7 +104,7 @@ def compute_connected_components(fileA,fileB):
 
     # Write connected components to TXT
     common_dir = os.path.dirname(fileA)
-    output_txt_path = os.path.join(common_dir, "connected_components.txt")
+    output_txt_path = os.path.join(common_dir, output_filename)
     write_components_txt(G, output_txt_path)
     print(f"Connected components written to: {output_txt_path}")
 

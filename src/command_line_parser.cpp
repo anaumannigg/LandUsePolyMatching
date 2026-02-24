@@ -47,7 +47,7 @@ CommandLineOptions parse_command_line(int argc, char* argv[]) {
         } else if (arg == "-e" & i + 1 < argc) {
             options.log_name = argv[++i];
         } else if (arg == "-s") {
-            options.exploit_opt_props = true;
+            options.exploit_opt_props = false;
         } else if (arg == "-m" & i + 1 < argc) {
             std::string mode_str = argv[++i];
             //transform to lower case for robustness

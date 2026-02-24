@@ -1,13 +1,20 @@
 #include "../include/linear_program.h"
+#include "../include/solver_context.h"
+#include "../include/solver_context_gurobi_access.h"
+
+#include "gurobi_c++.h"
+
+// ---- GUROBI VERSIONS ----
 
 //creates and solves an integer linear program w.r.t the nodes and edge weights within the given Graph g
-void LinearProgram::solveILP(GRBEnv& env, const Graph& g, int num_polys1, int num_polys2, Solution* solution) {
+void LinearProgram::solveILP(const Graph& g, int num_polys1, int num_polys2, Solution* solution) {
 
 
 
     try {
 
     // Create an empty model
+    GRBEnv& env = SolverContextGurobiAccessor::env(globalSolverContext());
     GRBModel model = GRBModel(env);
 
     // Create variables per edge in G (variable should be 1 when chosen and 0 when not chosen
@@ -118,7 +125,7 @@ void LinearProgram::solveILP(GRBEnv& env, const Graph& g, int num_polys1, int nu
 
 //creates and solves an integer linear program w.r.t the nodes and edge weights within the given Graph g
 //takes tree constraints into account
-void LinearProgram::solveILP_trees(GRBEnv& env,TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution* solution) {
+void LinearProgram::solveILP_trees(TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution* solution) {
     Graph& g = cg_tree.get_graph();
 
     //make sure the graph is directed upwards from the leafs to ensure an efficient collection of constraints
@@ -126,6 +133,7 @@ void LinearProgram::solveILP_trees(GRBEnv& env,TreeConstrainedCandidateGraph& cg
 
     try {
         // Create an empty model
+        GRBEnv& env = SolverContextGurobiAccessor::env(globalSolverContext());
         GRBModel model = GRBModel(env);
 
         // Create variables per edge in G (variable should be 1 when chosen and 0 when not chosen
@@ -232,7 +240,7 @@ void LinearProgram::solveILP_trees(GRBEnv& env,TreeConstrainedCandidateGraph& cg
 //solves the linear program defined by the trees fractionally and returns the solution as a vector
 //note that due to deletions in the Canzar Recursion, edges might be deleted. The returned vector thus has a constant
 //length of the edge number of the initial graph. Edges that have been deleted have fractional value -1.0
-std::vector<double> solveLP_trees_fractionally(GRBEnv& env,TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2) {
+std::vector<double> solveLP_trees_fractionally(TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2) {
     Graph& g = cg_tree.get_graph();
 
     //make sure the graph is directed upwards from the leafs to ensure an efficient collection of constraints
@@ -242,6 +250,7 @@ std::vector<double> solveLP_trees_fractionally(GRBEnv& env,TreeConstrainedCandid
 
     try {
         // Create an empty model
+        GRBEnv& env = SolverContextGurobiAccessor::env(globalSolverContext());
         GRBModel model = GRBModel(env);
 
         // Create variables per edge in G (variable should be 1 when chosen and 0 when not chosen
@@ -336,9 +345,9 @@ std::vector<double> solveLP_trees_fractionally(GRBEnv& env,TreeConstrainedCandid
 }
 
 //the matching algorithm proposed in 'On Tree Constrained Matchings and Generalizations' (Algorithm 1)
-std::vector<int> CanzarMatching(GRBEnv& env,TreeConstrainedCandidateGraph cg_tree, int num_polys1, int num_polys2) {
+std::vector<int> CanzarMatching(TreeConstrainedCandidateGraph cg_tree, int num_polys1, int num_polys2) {
     //get optimal fractional solution
-    auto X = solveLP_trees_fractionally(env, cg_tree, num_polys1, num_polys2);
+    auto X = solveLP_trees_fractionally(cg_tree, num_polys1, num_polys2);
 
     //first check if the solution is integer already, as then it can be returned right away
     bool is_integer=true;
@@ -387,7 +396,7 @@ std::vector<int> CanzarMatching(GRBEnv& env,TreeConstrainedCandidateGraph cg_tre
 
         //cout << "removed edges and recursed on graph with " << boost::num_edges(cg_tree_reduced.get_graph()) << " edges" << endl;
         //recurse
-        auto M = CanzarMatching(env, cg_tree_reduced, num_polys1,num_polys2);
+        auto M = CanzarMatching(cg_tree_reduced, num_polys1,num_polys2);
         return M;
 
     }
@@ -492,7 +501,7 @@ std::vector<int> CanzarMatching(GRBEnv& env,TreeConstrainedCandidateGraph cg_tre
         }
 
         //recurse
-        auto M = CanzarMatching(env,cg_tree,num_polys1,num_polys2);
+        auto M = CanzarMatching(cg_tree,num_polys1,num_polys2);
 
         //cout << "after recursion: " << boost::num_edges(cg_tree.get_graph()) << " edges in graph" << endl;
 
@@ -512,13 +521,13 @@ std::vector<int> CanzarMatching(GRBEnv& env,TreeConstrainedCandidateGraph cg_tre
     return {};
 }
 
-void LinearProgram::solveViaCanzar(GRBEnv& env,TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution& solution) {
+void LinearProgram::solveViaCanzar(TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution& solution) {
     Graph& g = cg_tree.get_graph();
     //make sure the edges in the tree point upwards to the root
     cg_tree.setTreeDirection(true);
 
     //approximate Matching using Canzar's Algorithm
-    auto M = CanzarMatching(env, cg_tree,num_polys1,num_polys2);
+    auto M = CanzarMatching(cg_tree,num_polys1,num_polys2);
 
     //collect all found matches and add them to the solution
     // if no edges were selected, return

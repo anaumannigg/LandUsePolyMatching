@@ -1,7 +1,8 @@
 #ifndef _linear_program_included_
 #define _linear_program_included_
 
-#include "gurobi_c++.h"
+#include <cassert>
+#include <algorithm>
 #include "cgal_includes.h"
 #include "graph_computations.h"
 #include "solution.h"
@@ -16,13 +17,14 @@ public:
     //sets up and solves ILP based on a bipartite graph G.
     //maximizes sum of chosen edges in constrained bipartite matching problem
     //the result is written into the provided solution object
-	static void solveILP(GRBEnv& env,const Graph& g, int num_polys1, int num_polys2, Solution* solution);
+	static void solveILP(const Graph& g, int num_polys1, int num_polys2, Solution* solution);
 
     //solves ILP considering tree constraints
-    static void solveILP_trees(GRBEnv& env,TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution* solution);
+    static void solveILP_trees(TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution* solution);
 
     //solves the tree constraint matching problem approximately using Canzar's Algorithm
-    static void solveViaCanzar(GRBEnv& env,TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution& solution);
+    static void solveViaCanzar(TreeConstrainedCandidateGraph& cg_tree, int num_polys1, int num_polys2, Solution& solution);
+
 };
 
 #endif

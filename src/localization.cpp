@@ -2,7 +2,7 @@
 
 //LOCALIZATION CLASS
 
-Localization::Localization(std::vector<Polygon_wh>& polys) : polys(polys) {
+Localization::Localization(const std::vector<Polygon_wh>& polys) : polys(polys) {
     //init r-tree
     this->rtree = bgi::rtree< Value_rtree, bgi::quadratic<16>>();
 

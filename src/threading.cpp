@@ -7,7 +7,6 @@ void Threading::solvingWorkerTHREAD(
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
-                  GRBEnv& env,
                   std::atomic<int>& processed_counter) {
     while (true) {
         ConnectedSetTask task;
@@ -24,7 +23,7 @@ void Threading::solvingWorkerTHREAD(
         }
 
         // Run your solver function (adapted for one task)
-        solveConnectedSet(task, env, processed_counter);
+        solveConnectedSet(task, processed_counter);
 
     }
 }
@@ -33,8 +32,9 @@ void Threading::decompositionWorkerTHREAD(std::queue<DecompositionTask>& tasks,
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
-                  const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
-                  const Localization& rtree1, const Localization& rtree2,
+                  const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2,
+                  const Localization& rtree2,
+                  std::vector<Edge>& thread_computed_edges,
                   std::atomic<int>& processed_counter) {
     while (true) {
         DecompositionTask task;
@@ -51,19 +51,32 @@ void Threading::decompositionWorkerTHREAD(std::queue<DecompositionTask>& tasks,
         }
 
         // Run your solver function (adapted for one task)
-        decomposeIntoConnectedComponents(task, polys1,polys2,merged_polys,rtree1,rtree2,processed_counter);
+        auto intersections = computeIntersectionsAsEdges(
+            task, polys1, polys2, rtree2, processed_counter
+        );
 
+        // reserve for performance
+        thread_computed_edges.reserve(
+            thread_computed_edges.size() + intersections.size()
+        );
+
+        // add to result
+        thread_computed_edges.insert(
+            thread_computed_edges.end(),
+            std::make_move_iterator(intersections.begin()),
+            std::make_move_iterator(intersections.end())
+        );
     }
 }
 
-void Threading::decompositionFromTXTWorkerTHREAD(std::queue<DecompositionTask>& tasks,
+void Threading::decompositionFromTXTWorkerTHREAD(std::queue<DecompositionFromTXTTask>& tasks,
                   std::mutex& queue_mutex,
                   std::condition_variable& cv,
                   std::atomic<bool>& done_flag,
                   const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2,
-                  std::atomic<int>& processed_counter) {
+                  const std::string& filename, std::atomic<int>& processed_counter) {
     while (true) {
-        DecompositionTask task;
+        DecompositionFromTXTTask task;
 
         // Critical section for pulling a task
         {
@@ -77,7 +90,7 @@ void Threading::decompositionFromTXTWorkerTHREAD(std::queue<DecompositionTask>& 
         }
 
         // Run your solver function (adapted for one task)
-        decomposeIntoConnectedComponentsUsingTXT(task, polys1,polys2,processed_counter);
+        decomposeIntoConnectedComponentsUsingTXT(task, polys1,polys2,filename,processed_counter);
 
     }
 }
@@ -96,7 +109,7 @@ void Threading::statusTHREAD(std::atomic<int>& processed_counter, int num_sets) 
 
 //run n : m map matching algorithm on the maps provided by file1 and file2 for each of the provided epsilon values
 //returns Solution to append to global Solution
-void Threading::solveConnectedSet(ConnectedSetTask task, GRBEnv& env, std::atomic<int>& processed_counter) {
+void Threading::solveConnectedSet(ConnectedSetTask task, std::atomic<int>& processed_counter) {
     //retreive config info
     double lambda = task.lambda;
     std::string data_name = task.data_name;
@@ -482,11 +495,11 @@ void Threading::solveConnectedSet(ConnectedSetTask task, GRBEnv& env, std::atomi
                     //solve according to chosen option
                     if(sol_mode == SOLUTION_MODE::OPT) {
                         //solve ILP on tree constrained graph
-                        LinearProgram::solveILP_trees(env, g_tree, polys1.size(), polys2.size(), &sol_local);
+                        LinearProgram::solveILP_trees(g_tree, polys1.size(), polys2.size(), &sol_local);
                     }
                     else if(sol_mode == SOLUTION_MODE::CANZAR3APPROX) {
                         //solve approximation algorithm
-                        LinearProgram::solveViaCanzar(env, g_tree,polys1.size(),polys2.size(),sol_local);
+                        LinearProgram::solveViaCanzar(g_tree,polys1.size(),polys2.size(),sol_local);
                     }
 
                     set_end = std::chrono::steady_clock::now();
@@ -588,7 +601,7 @@ void Threading::read_thread_results_from_file(const std::string& filename,
     in.close();
 }
 
-void Threading::decomposeIntoConnectedComponents(DecompositionTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
+void Threading::decomposeIntoConnectedComponents(DecompositionFromTXTTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const std::vector<Polygon_wh>& merged_polys,
                             const Localization& rtree1, const Localization& rtree2, std::atomic<int>& processed_counter) {
 
     int batch_begin = task.interval.first;
@@ -664,14 +677,30 @@ void Threading::decomposeIntoConnectedComponents(DecompositionTask task, const s
 
 }
 
-void Threading::decomposeIntoConnectedComponentsUsingTXT(DecompositionTask task,
+std::vector<Edge> Threading::computeIntersectionsAsEdges(DecompositionTask task, const std::vector<Polygon_wh>& polys1, const std::vector<Polygon_wh>& polys2, const Localization& rtree2, std::atomic<int>& processed_counter) {
+    std::vector<Edge> intersections;
+    for (int i= task.min_idx; i< task.max_idx; i++) {
+        std::vector<int> neighbors;
+        if (rtree2.get_neighbors(polys1[i],&neighbors)) {
+            for (int j = 0; j < neighbors.size(); j++) {
+                if (polys1[i].does_intersect(polys2[neighbors[j]])) {
+                    intersections.emplace_back(i, neighbors[j]);
+                }
+            }
+        }
+        ++processed_counter;
+    }
+    return intersections;
+}
+
+void Threading::decomposeIntoConnectedComponentsUsingTXT(DecompositionFromTXTTask task,
                                                  const std::vector<Polygon_wh>& polys1,
                                                  const std::vector<Polygon_wh>& polys2,
+                                                 const std::string& filename,
                                                  std::atomic<int>& processed_counter) {
-    std::string component_txt_path = "../input/" + task.data_name + "/connected_components.txt";
-    std::ifstream infile(component_txt_path);
+    std::ifstream infile(filename);
     if (!infile.is_open()) {
-        std::cerr << "Failed to open component file: " << component_txt_path << std::endl;
+        std::cerr << "Failed to open component file: " << filename << std::endl;
         return;
     }
 

@@ -230,20 +230,20 @@ class Application:
 
         build_dir = os.path.join("..", "build")
         input_dir = os.path.join("..", "input", dataset)
-        connected_file = os.path.join(input_dir, "connected_components.txt")
+        connected_file = os.path.join(input_dir, f"connected_components_{dd1}_{dd2}.txt")
 
         # Build step list
         steps = []
 
-        # Step 0: optional connected components
-        if not os.path.exists(connected_file):
-            fileA = os.path.join(input_dir, f"{dataset}_{dd1}.gpkg")
-            fileB = os.path.join(input_dir, f"{dataset}_{dd2}.gpkg")
-            steps.append((
-                None,
-                f"Computing connected components for {dd1} and {dd2}...",
-                lambda: compute_connected_components(fileA, fileB)
-            ))
+        # Step 0: optional connected components (Not needed, since C++ code does that itself if file doesn't exist. But we keep it here in case a user wants to do it in Python)
+        #if not os.path.exists(connected_file):
+        #    fileA = os.path.join(input_dir, f"{dataset}_{dd1}.gpkg")
+        #    fileB = os.path.join(input_dir, f"{dataset}_{dd2}.gpkg")
+        #    steps.append((
+        #        None,
+        #        f"Computing connected components for {dd1} and {dd2}...",
+        #        lambda: compute_connected_components(fileA, fileB,f"connected_components_{dd1}_{dd2}.txt")
+        #    ))
 
         # Normal C++ build + run pipeline
         steps.extend([
